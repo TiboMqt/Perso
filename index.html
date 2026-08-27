@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#F6F5F1">
+<title>Notre budget</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+  :root{
+    --bg:#F6F5F1;
+    --surface:#FFFFFF;
+    --ink:#302F2A;
+    --ink-soft:#75766D;
+    --ink-faint:#ABAC9F;
+    --border:#EAE8E0;
+    --accent-a:#E0995F;
+    --accent-a-bg:#FBEEE1;
+    --accent-b:#5C87A6;
+    --accent-b-bg:#E8F0F4;
+    --positive:#5FA875;
+    --positive-bg:#EAF4EC;
+    --negative:#C97B65;
+    --negative-bg:#F8ECE7;
+    --radius-lg:22px;
+    --radius-md:14px;
+    --radius-sm:10px;
+    --shadow:0 1px 2px rgba(48,47,42,0.05), 0 10px 26px -14px rgba(48,47,42,0.16);
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Inter', sans-serif; -webkit-font-smoothing:antialiased;
+    padding:20px 16px 64px;
+  }
+  .sheet{ max-width:520px; margin:0 auto; }
+  h1,h2,h3{ font-family:'Outfit', sans-serif; margin:0; }
+  input{ font-family:inherit; }
+  button{ font-family:inherit; cursor:pointer; }
+
+  /* ---------- SETUP ---------- */
+  #setup{
+    max-width:420px; margin:10vh auto; background:var(--surface);
+    border-radius:var(--radius-lg); box-shadow:var(--shadow); padding:30px 26px;
+  }
+  #setup .badge{
+    width:48px; height:48px; border-radius:50%;
+    background:linear-gradient(135deg, var(--accent-a) 0 50%, var(--accent-b) 50% 100%);
+    margin-bottom:14px;
+  }
+  #setup h1{ font-size:22px; font-weight:600; margin-bottom:6px; }
+  #setup p.hint{ font-size:13.5px; color:var(--ink-soft); line-height:1.5; margin:0 0 22px; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:12.5px; font-weight:600; color:var(--ink-soft); margin-bottom:6px; }
+  .field input{
+    width:100%; padding:11px 13px; border:1.5px solid var(--border); border-radius:var(--radius-sm);
+    background:var(--bg); color:var(--ink); font-size:14.5px; outline:none; transition:border-color .15s;
+  }
+  .field input:focus{ border-color:var(--accent-b); }
+  .field .small{ font-size:11.5px; color:var(--ink-faint); margin-top:5px; }
+  .primary-btn{
+    width:100%; padding:13px; border:none; border-radius:var(--radius-sm);
+    background:var(--ink); color:#fff; font-size:14.5px; font-weight:600; margin-top:6px;
+  }
+  .primary-btn:hover{ background:#454439; }
+  #setupError{ color:var(--negative); font-size:12.5px; margin-top:10px; display:none; }
+
+  /* ---------- APP SHELL ---------- */
+  #app{ display:none; }
+  header{ display:flex; align-items:center; gap:12px; margin-bottom:22px; padding-top:6px; }
+  .avatars{ display:flex; flex:0 0 auto; }
+  .avatar{
+    width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-family:'Outfit', sans-serif; font-weight:600; font-size:14px; color:#fff; border:2.5px solid var(--bg);
+  }
+  .avatar.a{ background:var(--accent-a); }
+  .avatar.b{ background:var(--accent-b); margin-left:-12px; }
+  header .titles{ flex:1; min-width:0; }
+  header h1{ font-size:21px; font-weight:600; }
+  .conn-status{ display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+  .conn-dot{ width:7px; height:7px; border-radius:50%; background:var(--ink-faint); flex:0 0 auto; }
+  .conn-dot.online{ background:var(--positive); box-shadow:0 0 0 3px var(--positive-bg); }
+  .conn-dot.offline{ background:var(--negative); box-shadow:0 0 0 3px var(--negative-bg); }
+  .gear-btn{
+    flex:0 0 auto; width:34px; height:34px; border-radius:50%; border:1.5px solid var(--border);
+    background:var(--surface); color:var(--ink-soft); font-size:15px; display:flex; align-items:center; justify-content:center;
+  }
+  .gear-btn:hover{ border-color:var(--ink-faint); }
+
+  /* ---------- PANELS ---------- */
+  .panel{ background:var(--surface); border-radius:var(--radius-lg); box-shadow:var(--shadow); margin-bottom:16px; overflow:hidden; }
+  .panel-header{ display:flex; align-items:center; gap:10px; padding:18px 20px; cursor:pointer; user-select:none; }
+  .panel-title-wrap{ flex:1; min-width:0; }
+  .panel-title{ font-size:15px; font-weight:600; }
+  .panel-synthesis{ font-family:'DM Mono', monospace; font-size:12.5px; color:var(--ink-soft); margin-top:3px; display:none; }
+  .panel.collapsed .panel-synthesis{ display:block; }
+  .panel-meta{ font-size:11px; color:var(--ink-faint); margin-top:2px; }
+  .chevron{ font-size:12px; color:var(--ink-faint); transition:transform .2s ease; }
+  .panel.collapsed .chevron{ transform:rotate(-90deg); }
+  .panel-body{ padding:0 20px 20px; }
+  .panel.collapsed .panel-body{ display:none; }
+
+  /* ---------- REVENUS ---------- */
+  .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:4px; }
+  @media (max-width:420px){ .grid-2{ grid-template-columns:1fr; } }
+  .person-card{ border-radius:var(--radius-md); padding:15px 16px; }
+  .person-card.a{ background:var(--accent-a-bg); }
+  .person-card.b{ background:var(--accent-b-bg); }
+  .name-input{
+    font-family:'Outfit', sans-serif; font-weight:600; font-size:15px; border:none; background:transparent;
+    color:var(--ink); width:100%; padding:2px 0; border-bottom:1px solid transparent;
+  }
+  .name-input:focus{ outline:none; border-bottom:1px solid currentColor; }
+  .mode-toggle{ display:inline-flex; margin-top:10px; background:rgba(255,255,255,.6); border-radius:99px; padding:2px; }
+  .mode-toggle button{
+    font-size:11px; font-weight:600; padding:5px 11px; border:none; background:transparent; color:var(--ink-soft); border-radius:99px;
+  }
+  .mode-toggle button.active{ background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  .amount-row{ display:flex; align-items:baseline; gap:4px; margin-top:12px; }
+  .amount-row .euro-input{
+    font-family:'DM Mono', monospace; font-size:19px; font-weight:500; border:none; background:transparent;
+    color:var(--ink); width:100%; padding:0;
+  }
+  .amount-row .euro-input:focus{ outline:none; }
+  .amount-row .suffix{ font-size:12px; color:var(--ink-soft); }
+  .income-equiv{ font-size:11px; color:var(--ink-soft); margin-top:4px; opacity:.85; }
+
+  .shared-bar-wrap{ margin-top:18px; }
+  .shared-bar-track{ height:14px; background:var(--border); border-radius:99px; display:flex; overflow:hidden; }
+  .shared-bar-seg{ transition:width .35s ease; }
+  .shared-bar-seg.a{ background:var(--accent-a); }
+  .shared-bar-seg.b{ background:var(--accent-b); }
+  .shared-bar-legend{ display:flex; justify-content:space-between; font-size:12.5px; margin-top:9px; }
+  .shared-bar-legend .chip{ display:flex; align-items:center; gap:6px; color:var(--ink-soft); }
+  .shared-bar-legend .dot{ width:8px; height:8px; border-radius:50%; }
+  .shared-bar-legend .dot.a{ background:var(--accent-a); }
+  .shared-bar-legend .dot.b{ background:var(--accent-b); }
+  .shared-bar-legend b{ font-family:'DM Mono', monospace; color:var(--ink); font-weight:500; }
+
+  /* ---------- PARTICIPATION ---------- */
+  .ribbon{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+  @media (max-width:420px){ .ribbon{ grid-template-columns:1fr; } }
+  .ribbon-card{ background:var(--surface); border-radius:var(--radius-lg); box-shadow:var(--shadow); padding:18px 20px; border-left:4px solid; }
+  .ribbon-card.a{ border-color:var(--accent-a); }
+  .ribbon-card.b{ border-color:var(--accent-b); }
+  .ribbon-card .who{ font-size:12.5px; color:var(--ink-soft); font-weight:600; }
+  .ribbon-card .sum{ font-family:'DM Mono', monospace; font-size:24px; font-weight:500; margin-top:4px; }
+  .ribbon-card .detail{ font-size:11px; color:var(--ink-faint); margin-top:4px; }
+
+  /* ---------- DEPENSES ---------- */
+  .expense-row{ display:flex; align-items:center; gap:10px; padding:11px 0; border-bottom:1px solid var(--border); }
+  .expense-row:last-of-type{ border-bottom:none; }
+  .expense-label{
+    font-size:14px; border:none; background:transparent; color:var(--ink); flex:1; padding:2px 0;
+  }
+  .expense-label:focus{ outline:none; }
+  .expense-amount{ font-family:'DM Mono', monospace; font-size:14.5px; border:none; background:transparent; color:var(--ink); text-align:right; width:80px; }
+  .expense-amount:focus{ outline:none; }
+  .remove-btn{ border:none; background:none; color:var(--ink-faint); font-size:16px; padding:2px 4px; line-height:1; }
+  .remove-btn:hover{ color:var(--negative); }
+
+  .add-expense{ display:flex; gap:8px; margin-top:14px; }
+  .add-expense input{
+    padding:10px 12px; border:1.5px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--ink); font-size:13.5px;
+  }
+  .add-expense input[name="label"]{ flex:1; }
+  .add-expense input[name="amount"]{ width:84px; font-family:'DM Mono', monospace; text-align:right; }
+  .add-expense button{
+    padding:10px 16px; border:none; border-radius:var(--radius-sm); background:var(--ink); color:#fff; font-weight:600; font-size:13px;
+  }
+
+  .total-row{ display:flex; justify-content:space-between; font-family:'DM Mono', monospace; font-weight:500; font-size:15.5px; margin-top:16px; padding-top:14px; border-top:1.5px solid var(--border); }
+
+  /* ---------- SOLDE ---------- */
+  .solde-final{
+    border-radius:var(--radius-lg); box-shadow:var(--shadow); padding:26px 24px; text-align:center; transition:background .3s ease;
+  }
+  .solde-final.positive{ background:var(--positive-bg); }
+  .solde-final.negative{ background:var(--negative-bg); }
+  .solde-final .label{ font-size:13px; color:var(--ink-soft); font-weight:600; }
+  .solde-final .value{ font-family:'DM Mono', monospace; font-size:34px; font-weight:500; margin-top:6px; }
+  .solde-final.positive .value{ color:var(--positive); }
+  .solde-final.negative .value{ color:var(--negative); }
+  .solde-final .sub{ font-size:12px; color:var(--ink-faint); margin-top:6px; }
+
+  footer{ text-align:center; font-size:11.5px; color:var(--ink-faint); margin-top:28px; }
+  footer button{ background:none; border:none; color:var(--ink-faint); text-decoration:underline; font-size:11.5px; padding:0; }
+</style>
+</head>
+<body>
+
+<!-- ============ SETUP ============ -->
+<div id="setup">
+  <div class="badge"></div>
+  <h1>Connecter votre budget</h1>
+  <p class="hint">Ces informations relient l'appli à votre base partagée. Vous ne les saisissez qu'une fois par téléphone — votre compagne fera de même avec les mêmes valeurs pour le foyer et le code.</p>
+  <div class="field">
+    <label>URL du projet Supabase</label>
+    <input type="text" id="cfgUrl" placeholder="https://xxxxx.supabase.co" autocapitalize="off" />
+  </div>
+  <div class="field">
+    <label>Clé publique (anon)</label>
+    <input type="text" id="cfgKey" placeholder="eyJhbGciOi..." autocapitalize="off" />
+  </div>
+  <div class="field">
+    <label>Code du foyer</label>
+    <input type="text" id="cfgCode" placeholder="ex. dupont-maison" autocapitalize="off" />
+    <div class="small">Un identifiant que vous inventez, identique sur les deux téléphones.</div>
+  </div>
+  <div class="field">
+    <label>Votre prénom</label>
+    <input type="text" id="cfgViewer" placeholder="ex. Camille" />
+    <div class="small">Sert uniquement à afficher qui a modifié quoi.</div>
+  </div>
+  <button class="primary-btn" id="connectBtn">Se connecter</button>
+  <div id="setupError"></div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app">
+<div class="sheet">
+
+  <header>
+    <div class="avatars">
+      <div class="avatar a" id="avatarA">M</div>
+      <div class="avatar b" id="avatarB">C</div>
+    </div>
+    <div class="titles">
+      <h1>Notre budget</h1>
+      <div class="conn-status"><span class="conn-dot" id="connDot"></span><span id="connLabel">Connexion…</span></div>
+    </div>
+    <button class="gear-btn" id="gearBtn" title="Paramètres">⚙</button>
+  </header>
+
+  <!-- ============ PANEL REVENUS ============ -->
+  <div class="panel" id="panelRevenus">
+    <div class="panel-header" data-role="toggle-panel" data-panel="revenus">
+      <div class="panel-title-wrap">
+        <p class="panel-title">Revenus &amp; répartition</p>
+        <p class="panel-synthesis" id="synthRevenus"></p>
+        <p class="panel-meta" id="metaRevenus"></p>
+      </div>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="panel-body">
+      <div class="grid-2">
+        <div class="person-card a">
+          <input class="name-input" id="nameA" value="Moi" />
+          <div class="mode-toggle" data-person="A">
+            <button data-mode="monthly" data-person="A">Mensuel</button>
+            <button data-mode="yearly" data-person="A">Annuel</button>
+          </div>
+          <div class="amount-row">
+            <input class="euro-input" id="incomeA" type="number" min="0" step="10" value="2200" />
+            <span class="suffix">€ net</span>
+          </div>
+          <div class="income-equiv" id="equivA"></div>
+        </div>
+        <div class="person-card b">
+          <input class="name-input" id="nameB" value="Ma compagne" />
+          <div class="mode-toggle" data-person="B">
+            <button data-mode="monthly" data-person="B">Mensuel</button>
+            <button data-mode="yearly" data-person="B">Annuel</button>
+          </div>
+          <div class="amount-row">
+            <input class="euro-input" id="incomeB" type="number" min="0" step="10" value="1800" />
+            <span class="suffix">€ net</span>
+          </div>
+          <div class="income-equiv" id="equivB"></div>
+        </div>
+      </div>
+
+      <div class="shared-bar-wrap">
+        <div class="shared-bar-track">
+          <div class="shared-bar-seg a" id="segA" style="width:50%"></div>
+          <div class="shared-bar-seg b" id="segB" style="width:50%"></div>
+        </div>
+        <div class="shared-bar-legend">
+          <span class="chip"><span class="dot a"></span><span id="legendA">Moi</span> · <b id="pctA">50,0 %</b></span>
+          <span class="chip"><span id="legendB">Ma compagne</span> · <b id="pctB">50,0 %</b><span class="dot b"></span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PARTICIPATION ============ -->
+  <div class="ribbon">
+    <div class="ribbon-card a">
+      <div class="who" id="ribbonNameA">Moi</div>
+      <div class="sum" id="ribbonSumA">0,00 €</div>
+      <div class="detail" id="ribbonDetailA">au prorata de 50,0 % des revenus</div>
+    </div>
+    <div class="ribbon-card b">
+      <div class="who" id="ribbonNameB">Ma compagne</div>
+      <div class="sum" id="ribbonSumB">0,00 €</div>
+      <div class="detail" id="ribbonDetailB">au prorata de 50,0 % des revenus</div>
+    </div>
+  </div>
+
+  <!-- ============ PANEL DEPENSES ============ -->
+  <div class="panel" id="panelDepenses">
+    <div class="panel-header" data-role="toggle-panel" data-panel="depenses">
+      <div class="panel-title-wrap">
+        <p class="panel-title">Postes de dépenses mensuels</p>
+        <p class="panel-synthesis" id="synthDepenses"></p>
+        <p class="panel-meta" id="metaDepenses"></p>
+      </div>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="panel-body">
+      <div id="expenseList"></div>
+      <div class="add-expense">
+        <input type="text" name="label" id="newLabel" placeholder="Nouveau poste…" />
+        <input type="number" name="amount" id="newAmount" placeholder="0" min="0" step="1" />
+        <button id="addExpenseBtn">Ajouter</button>
+      </div>
+      <div class="total-row"><span>Total des dépenses</span><span id="totalExpenses">0,00 €</span></div>
+    </div>
+  </div>
+
+  <!-- ============ SOLDE FINAL ============ -->
+  <div class="solde-final positive" id="soldeFinal">
+    <div class="label" id="soldeLabel">Solde de fin de mois</div>
+    <div class="value" id="soldeValue">0,00 €</div>
+    <div class="sub">Total des revenus − total des dépenses</div>
+  </div>
+
+  <footer>
+    Synchronisé en temps réel avec votre compagne · <button id="disconnectBtn">Changer de configuration</button>
+  </footer>
+</div>
+</div>
+
+<script>
+(function(){
+  const fmt = (n) => (isFinite(n)?n:0).toLocaleString('fr-FR', {style:'currency', currency:'EUR'});
+  const fmtPct = (n) => (isFinite(n)?n:0).toLocaleString('fr-FR', {minimumFractionDigits:1, maximumFractionDigits:1});
+  const fmtTime = (iso) => iso ? new Date(iso).toLocaleString('fr-FR', {dateStyle:'short', timeStyle:'short'}) : null;
+
+  const CLIENT_ID = 'c-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const TABLE = 'foyers';
+
+  let cfg = {
+    url: localStorage.getItem('foyer_cfg_url') || '',
+    key: localStorage.getItem('foyer_cfg_key') || '',
+    code: localStorage.getItem('foyer_cfg_code') || '',
+    viewer: localStorage.getItem('foyer_cfg_viewer') || ''
+  };
+
+  let sb = null;
+  let channel = null;
+  let pushTimer = null;
+
+  let state = {
+    revenus:{
+      nameA:'Moi', incomeA:2200, modeA:'monthly',
+      nameB:'Ma compagne', incomeB:1800, modeB:'monthly',
+      lastModified:null, lastEditor:null
+    },
+    depenses:{
+      expenses:[
+        {id:1, label:'Loyer', amount:850},
+        {id:2, label:'Électricité', amount:90},
+        {id:3, label:'Internet', amount:35},
+        {id:4, label:'Courses', amount:400},
+        {id:5, label:'Assurances', amount:60}
+      ],
+      nextId:6, lastModified:null, lastEditor:null
+    }
+  };
+
+  let collapsed = { revenus:false, depenses:false };
+
+  // ---------- SETUP ----------
+  function showSetup(){
+    document.getElementById('setup').style.display = 'block';
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('cfgUrl').value = cfg.url;
+    document.getElementById('cfgKey').value = cfg.key;
+    document.getElementById('cfgCode').value = cfg.code;
+    document.getElementById('cfgViewer').value = cfg.viewer;
+  }
+  function showApp(){
+    document.getElementById('setup').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+  }
+
+  document.getElementById('connectBtn').addEventListener('click', async () => {
+    const url = document.getElementById('cfgUrl').value.trim();
+    const key = document.getElementById('cfgKey').value.trim();
+    const code = document.getElementById('cfgCode').value.trim();
+    const viewer = document.getElementById('cfgViewer').value.trim();
+    const errBox = document.getElementById('setupError');
+    errBox.style.display = 'none';
+    if(!url || !key || !code){
+      errBox.textContent = 'Merci de remplir au moins l\u2019URL, la clé et le code du foyer.';
+      errBox.style.display = 'block';
+      return;
+    }
+    cfg = {url, key, code, viewer};
+    localStorage.setItem('foyer_cfg_url', url);
+    localStorage.setItem('foyer_cfg_key', key);
+    localStorage.setItem('foyer_cfg_code', code);
+    localStorage.setItem('foyer_cfg_viewer', viewer);
+    try{
+      await connect();
+      showApp();
+    }catch(e){
+      const detail = (e && e.message) ? e.message : String(e);
+      errBox.textContent = 'Connexion impossible : ' + detail;
+      errBox.style.display = 'block';
+    }
+  });
+
+  document.getElementById('gearBtn').addEventListener('click', showSetup);
+  document.getElementById('disconnectBtn').addEventListener('click', (e) => { e.preventDefault(); showSetup(); });
+
+  // ---------- CONNEXION SUPABASE ----------
+  function setConn(status){
+    const dot = document.getElementById('connDot');
+    const label = document.getElementById('connLabel');
+    dot.className = 'conn-dot' + (status === 'online' ? ' online' : status === 'offline' ? ' offline' : '');
+    label.textContent = status === 'online' ? 'Synchronisé'
+      : status === 'offline' ? 'Hors ligne'
+      : 'Connexion…';
+  }
+
+  let sbClientKey = null;
+
+  async function connect(){
+    setConn('connecting');
+    if(!window.supabase || !window.supabase.createClient){
+      throw new Error('Le SDK Supabase ne s\u2019est pas chargé (vérifiez votre connexion internet ou un bloqueur de script).');
+    }
+    const clientKey = cfg.url + '|' + cfg.key;
+    if(!sb || sbClientKey !== clientKey){
+      sb = window.supabase.createClient(cfg.url, cfg.key);
+      sbClientKey = clientKey;
+    }
+    if(channel){
+      try{ await sb.removeChannel(channel); }catch(e){}
+      channel = null;
+    }
+
+    let { data, error } = await sb.from(TABLE).select('*').eq('id', cfg.code).maybeSingle();
+    if(error) throw error;
+
+    if(data && data.data){
+      state = Object.assign(state, data.data);
+    } else {
+      await sb.from(TABLE).upsert({ id:cfg.code, data:state, updated_at:new Date().toISOString(), updated_by:CLIENT_ID });
+    }
+
+    channel = sb.channel('foyer-'+cfg.code)
+      .on('postgres_changes', { event:'*', schema:'public', table:TABLE, filter:`id=eq.${cfg.code}` }, (payload) => {
+        if(payload.new && payload.new.updated_by !== CLIENT_ID && payload.new.data){
+          state = Object.assign(state, payload.new.data);
+          hydrateInputs();
+          render();
+        }
+      })
+      .subscribe((status) => {
+        if(status === 'SUBSCRIBED') setConn('online');
+        else if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') setConn('offline');
+      });
+
+    hydrateInputs();
+    render();
+    window.addEventListener('online', () => setConn('online'));
+    window.addEventListener('offline', () => setConn('offline'));
+  }
+
+  function pushState(){
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(async () => {
+      if(!sb) return;
+      try{
+        await sb.from(TABLE).upsert({ id:cfg.code, data:state, updated_at:new Date().toISOString(), updated_by:CLIENT_ID });
+        setConn('online');
+      }catch(e){ setConn('offline'); }
+    }, 600);
+  }
+
+  // ---------- HYDRATATION / RENDU ----------
+  function hydrateInputs(){
+    document.getElementById('nameA').value = state.revenus.nameA;
+    document.getElementById('nameB').value = state.revenus.nameB;
+    document.getElementById('incomeA').value = state.revenus.incomeA;
+    document.getElementById('incomeB').value = state.revenus.incomeB;
+    updateModeButtons();
+  }
+
+  function updateModeButtons(){
+    document.querySelectorAll('.mode-toggle[data-person="A"] button').forEach(b=> b.classList.toggle('active', b.dataset.mode === state.revenus.modeA));
+    document.querySelectorAll('.mode-toggle[data-person="B"] button').forEach(b=> b.classList.toggle('active', b.dataset.mode === state.revenus.modeB));
+  }
+
+  function monthlyIncome(mode, value){
+    const v = Math.max(0, Number(value) || 0);
+    return mode === 'yearly' ? v/12 : v;
+  }
+
+  function touch(section){
+    state[section].lastModified = new Date().toISOString();
+    state[section].lastEditor = cfg.viewer || null;
+  }
+
+  function metaText(section){
+    const t = fmtTime(state[section].lastModified);
+    if(!t) return 'Pas encore modifié';
+    const who = state[section].lastEditor;
+    return who ? `Modifié par ${who} · ${t}` : `Modifié · ${t}`;
+  }
+
+  function renderExpenseList(){
+    const list = document.getElementById('expenseList');
+    list.innerHTML = state.depenses.expenses.map(e => `
+      <div class="expense-row" data-id="${e.id}">
+        <input class="expense-label" data-role="expense-label" data-id="${e.id}" value="${escapeAttr(e.label)}" />
+        <input class="expense-amount" data-role="expense-amount" data-id="${e.id}" type="number" min="0" step="1" value="${e.amount}" />
+        <button class="remove-btn" data-role="remove-expense" data-id="${e.id}" title="Supprimer">✕</button>
+      </div>
+    `).join('');
+  }
+
+  function escapeAttr(s){ return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+  function render(){
+    const r = state.revenus, d = state.depenses;
+    const incomeA = monthlyIncome(r.modeA, r.incomeA);
+    const incomeB = monthlyIncome(r.modeB, r.incomeB);
+    const totalIncome = incomeA + incomeB;
+    const shareA = totalIncome > 0 ? incomeA / totalIncome : 0.5;
+    const shareB = totalIncome > 0 ? incomeB / totalIncome : 0.5;
+    const totalExpenses = d.expenses.reduce((s,e) => s + (Number(e.amount)||0), 0);
+    const savings = totalIncome - totalExpenses;
+    const contribA = shareA * totalExpenses;
+    const contribB = shareB * totalExpenses;
+
+    document.getElementById('avatarA').textContent = (r.nameA||'?').trim().charAt(0).toUpperCase();
+    document.getElementById('avatarB').textContent = (r.nameB||'?').trim().charAt(0).toUpperCase();
+
+    document.getElementById('equivA').textContent = r.modeA === 'yearly' ? `soit ${fmt(incomeA)} / mois` : `soit ${fmt(incomeA*12)} / an`;
+    document.getElementById('equivB').textContent = r.modeB === 'yearly' ? `soit ${fmt(incomeB)} / mois` : `soit ${fmt(incomeB*12)} / an`;
+
+    document.getElementById('segA').style.width = (shareA*100).toFixed(1)+'%';
+    document.getElementById('segB').style.width = (shareB*100).toFixed(1)+'%';
+    document.getElementById('legendA').textContent = r.nameA || 'Personne A';
+    document.getElementById('legendB').textContent = r.nameB || 'Personne B';
+    document.getElementById('pctA').textContent = fmtPct(shareA*100)+' %';
+    document.getElementById('pctB').textContent = fmtPct(shareB*100)+' %';
+
+    document.getElementById('synthRevenus').textContent = `${fmt(totalIncome)} / mois · ${fmtPct(shareA*100)} % / ${fmtPct(shareB*100)} %`;
+    document.getElementById('metaRevenus').textContent = metaText('revenus');
+
+    renderExpenseList();
+    document.getElementById('totalExpenses').textContent = fmt(totalExpenses);
+    document.getElementById('synthDepenses').textContent = `${fmt(totalExpenses)} / mois · ${d.expenses.length} poste${d.expenses.length>1?'s':''}`;
+    document.getElementById('metaDepenses').textContent = metaText('depenses');
+
+    document.getElementById('ribbonNameA').textContent = r.nameA || 'Personne A';
+    document.getElementById('ribbonNameB').textContent = r.nameB || 'Personne B';
+    document.getElementById('ribbonSumA').textContent = fmt(contribA);
+    document.getElementById('ribbonSumB').textContent = fmt(contribB);
+    document.getElementById('ribbonDetailA').textContent = `au prorata de ${fmtPct(shareA*100)} % des revenus`;
+    document.getElementById('ribbonDetailB').textContent = `au prorata de ${fmtPct(shareB*100)} % des revenus`;
+
+    const soldeFinal = document.getElementById('soldeFinal');
+    soldeFinal.classList.remove('positive','negative');
+    soldeFinal.classList.add(savings >= 0 ? 'positive' : 'negative');
+    document.getElementById('soldeValue').textContent = (savings>=0?'+ ':'− ') + fmt(Math.abs(savings));
+    document.getElementById('soldeLabel').textContent = savings >= 0 ? 'Il vous restera' : 'Il manquera';
+
+    updateModeButtons();
+  }
+
+  // ---------- ECOUTEURS ----------
+  document.getElementById('nameA').addEventListener('input', e => { state.revenus.nameA = e.target.value; touch('revenus'); render(); pushState(); });
+  document.getElementById('nameB').addEventListener('input', e => { state.revenus.nameB = e.target.value; touch('revenus'); render(); pushState(); });
+  document.getElementById('incomeA').addEventListener('input', e => { state.revenus.incomeA = e.target.value; touch('revenus'); render(); pushState(); });
+  document.getElementById('incomeB').addEventListener('input', e => { state.revenus.incomeB = e.target.value; touch('revenus'); render(); pushState(); });
+
+  document.querySelectorAll('.mode-toggle button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const person = btn.dataset.person, newMode = btn.dataset.mode, r = state.revenus;
+      if(person === 'A' && newMode !== r.modeA){
+        const monthly = monthlyIncome(r.modeA, r.incomeA);
+        r.incomeA = newMode === 'yearly' ? Math.round(monthly*12) : Math.round(monthly);
+        r.modeA = newMode;
+        document.getElementById('incomeA').value = r.incomeA;
+      } else if(person === 'B' && newMode !== r.modeB){
+        const monthly = monthlyIncome(r.modeB, r.incomeB);
+        r.incomeB = newMode === 'yearly' ? Math.round(monthly*12) : Math.round(monthly);
+        r.modeB = newMode;
+        document.getElementById('incomeB').value = r.incomeB;
+      } else { return; }
+      touch('revenus'); render(); pushState();
+    });
+  });
+
+  document.getElementById('expenseList').addEventListener('input', e => {
+    const id = Number(e.target.dataset.id);
+    const exp = state.depenses.expenses.find(x => x.id === id);
+    if(!exp) return;
+    if(e.target.dataset.role === 'expense-label') exp.label = e.target.value;
+    if(e.target.dataset.role === 'expense-amount') exp.amount = e.target.value;
+    touch('depenses'); render(); pushState();
+  });
+  document.getElementById('expenseList').addEventListener('click', e => {
+    if(e.target.dataset.role === 'remove-expense'){
+      const id = Number(e.target.dataset.id);
+      state.depenses.expenses = state.depenses.expenses.filter(x => x.id !== id);
+      touch('depenses'); render(); pushState();
+    }
+  });
+  document.getElementById('addExpenseBtn').addEventListener('click', () => {
+    const labelInput = document.getElementById('newLabel'), amountInput = document.getElementById('newAmount');
+    const label = labelInput.value.trim() || 'Nouveau poste';
+    const amount = Number(amountInput.value) || 0;
+    state.depenses.expenses.push({id: state.depenses.nextId++, label, amount});
+    labelInput.value = ''; amountInput.value = '';
+    touch('depenses'); render(); pushState();
+  });
+  document.getElementById('newLabel').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('addExpenseBtn').click(); });
+  document.getElementById('newAmount').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('addExpenseBtn').click(); });
+
+  document.querySelectorAll('[data-role="toggle-panel"]').forEach(header => {
+    header.addEventListener('click', () => {
+      const panel = header.dataset.panel;
+      collapsed[panel] = !collapsed[panel];
+      document.getElementById(panel === 'revenus' ? 'panelRevenus' : 'panelDepenses').classList.toggle('collapsed', collapsed[panel]);
+    });
+  });
+
+  // ---------- DEMARRAGE ----------
+  if(cfg.url && cfg.key && cfg.code){
+    connect().then(showApp).catch(() => showSetup());
+  } else {
+    showSetup();
+  }
+})();
+</script>
+
+</body>
+</html>
